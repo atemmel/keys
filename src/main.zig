@@ -23,7 +23,7 @@ fn CreateBind(key: kbm.VIRTUAL_KEY, action: []const u8) KeyBind {
 
 const binds = [_]KeyBind{
     CreateBind(kbm.VK_R, "explorer"),
-    CreateBind(kbm.VK_T, "wt"),
+    CreateBind(kbm.VK_RETURN, "wt"),
 };
 
 fn registerKeys() void {
