@@ -11,10 +11,10 @@ const modifier = kbm.HOT_KEY_MODIFIERS.ALT;
 
 const KeyBind = struct {
     key: u32,
-    action: fn(std.mem.Allocator) void,
+    action: []const u8,
 };
 
-fn CreateBind(key: kbm.VIRTUAL_KEY, action: fn(std.mem.Allocator)void) KeyBind {
+fn CreateBind(key: kbm.VIRTUAL_KEY, action: []const u8) KeyBind {
     return KeyBind{
         .key = @enumToInt(key),
         .action = action,
@@ -22,39 +22,26 @@ fn CreateBind(key: kbm.VIRTUAL_KEY, action: fn(std.mem.Allocator)void) KeyBind {
 }
 
 const binds = [_]KeyBind{
-    CreateBind(kbm.VK_R, openExplorer),
-    CreateBind(kbm.VK_T, doSomething),
+    CreateBind(kbm.VK_R, "explorer"),
+    CreateBind(kbm.VK_T, "wt"),
 };
 
 fn registerKeys() void {
-    //return RegisterHotKey(
-    //null,   // hwnd
-    //1,      // id
-    //kbm.HOT_KEY_MODIFIERS.ALT,      // modifier
-    //@enumToInt(kbm.VK_R),      // virtual key-code
-    //);
-
     var id: i32 = 1;
     for(binds) |bind| {
         _ = RegisterHotKey(
-            null,   // hwnd
-            id,     // id
+            null,       // hwnd
+            id,         // id
             modifier,   // modifier(s)
-            bind.key,
+            bind.key,   // virtual key-code
         );
         id += 1;
     }
 }
 
-fn doSomething(_: std.mem.Allocator) void {
-    print("Something is done!\n", .{});
-}
-
-fn openExplorer(allocator: std.mem.Allocator) void {
-    print("Attempting to open explorer\n", .{});
-    const proc = std.ChildProcess.init(&[_][]const u8{
-        "explorer",
-    }, allocator) catch |err| {
+fn spawn(allocator: std.mem.Allocator, what: []const u8) void {
+    const args = [_][]const u8{what};
+    const proc = std.ChildProcess.init(&args, allocator) catch |err| {
         print("Error spawning process: {s}\n", .{@errorName(err)});
         return;
     };
@@ -76,15 +63,11 @@ fn readMessageLoop(allocator: std.mem.Allocator) void {
             wam.PEEK_MESSAGE_REMOVE_TYPE.REMOVE,       // removeMsg
         );
 
-
-        //if(msg.wParam == 1) {
-        //print("{}\n", .{msg});
-        //}
-
         const id = msg.wParam;
         if(id > 0 and id - 1 < binds.len) {
             const index = id - 1;
-            binds[index].action(allocator);
+            //binds[index].action(allocator);
+            spawn(allocator, binds[index].action);
         }
 
         const amount = std.time.ns_per_ms * 10;
