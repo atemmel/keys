@@ -1,0 +1,6 @@
+id: o6b31yhlr2egdvoben8y7kw66m6zuorcxwsg7li7z62cg8i0
+name: keys
+license: MIT
+description: none
+root_dependencies:
+  - src: git https://github.com/marlersoft/zigwin32
