@@ -228,6 +228,8 @@ pub fn createHiddenDesktop(name: [:0]u16) ?sad.HDESK {
 }
 
 pub fn desktopTest() void {
+    //TODO:
+    //https://www.codeproject.com/Articles/21352/Virtual-Desktop-A-Simple-Desktop-Management-Tool
     var original_desktop: sad.HDESK = undefined;
     var hidden_desktop: sad.HDESK = undefined;
 
@@ -249,7 +251,6 @@ pub fn desktopTest() void {
     print("Entering hidden desktop\n", .{});
 
     _ = SetThreadDesktop(hidden_desktop);
-    _ = SwitchDesktop(hidden_desktop);
 
     // alt+e to exit
     if (RegisterHotKey(
@@ -258,6 +259,7 @@ pub fn desktopTest() void {
         modifier, // modifier(s)
         0x45, // virtual key-code
     ) > 0) {
+        _ = SwitchDesktop(hidden_desktop);
         var msg = std.mem.zeroes(wam.MSG);
         while (GetMessageW(&msg, null, 0, 0) != 0) {
             if (msg.message == wam.WM_HOTKEY) {
