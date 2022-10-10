@@ -4,9 +4,9 @@ const kbm = win32.ui.input.keyboard_and_mouse;
 const wam = win32.ui.windows_and_messaging;
 
 const debug = std.debug;
-const print = debug.print;
 const RegisterHotKey = kbm.RegisterHotKey;
 const PeekMessageW = wam.PeekMessageW;
+const log = std.log;
 
 const modifier = kbm.HOT_KEY_MODIFIERS.ALT;
 
@@ -22,9 +22,12 @@ fn createBind(key: kbm.VIRTUAL_KEY, action: []const u8) KeyBind {
     };
 }
 
+// add keybindings here
 const binds = [_]KeyBind{
     createBind(kbm.VK_E, "explorer"),
     createBind(kbm.VK_RETURN, "wt"),
+    createBind(kbm.VK_D, "tmenu run"),
+    createBind(kbm.VK_O, "tmenu open"),
 };
 
 fn registerKeys() void {
@@ -41,14 +44,16 @@ fn registerKeys() void {
 }
 
 fn spawn(allocator: std.mem.Allocator, what: []const u8) void {
-    const args = [_][]const u8{what};
-    const proc = std.ChildProcess.init(&args, allocator) catch |err| {
-        print("Error spawning process: {s}\n", .{@errorName(err)});
-        return;
-    };
-    defer proc.deinit();
+    var it = std.mem.tokenize(u8, what, " ");
+    var args = std.ArrayList([]const u8).init(allocator);
+    defer args.deinit();
+    while (it.next()) |slice| {
+        args.append(slice) catch {};
+    }
+    log.info("trying to spawn: {s}", .{args.items});
+    var proc = std.ChildProcess.init(args.items, allocator);
     proc.spawn() catch |err| {
-        print("Error spawning process: {s}\n", .{@errorName(err)});
+        log.err("Error spawning process: {s}\n", .{@errorName(err)});
     };
 }
 
@@ -83,6 +88,8 @@ pub fn main() anyerror!void {
         debug.assert(gpa.deinit());
     }
 
+    log.info("Registering keys", .{});
     registerKeys();
+    log.info("Starting message loop", .{});
     readMessageLoop(allocator);
 }

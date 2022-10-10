@@ -12,11 +12,18 @@ pub fn build(b: *std.build.Builder) void {
     // Standard release options allow the person running `zig build` to select
     // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
     const mode = b.standardReleaseOptions();
-    
+
     const exe = b.addExecutable("keys", "src/main.zig");
     deps.addAllTo(exe);
     exe.setTarget(target);
     exe.setBuildMode(mode);
+
+    if (mode == .Debug) {
+        exe.subsystem = .Console;
+    } else {
+        exe.subsystem = .Windows;
+    }
+
     exe.install();
 
     const run_cmd = exe.run();
