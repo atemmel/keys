@@ -8,7 +8,7 @@ pub const Keybind = struct {
         Plus,
         Space,
         Escape,
-        Enter,
+        Return,
         Backspace,
         Caps,
         Tab,
@@ -52,11 +52,11 @@ pub fn parse(src: []const u8, ally: Allocator) ![]Keybind {
         .keybinds = std.ArrayList(Keybind).init(ally),
     };
     defer state.deinit(ally);
-    while (try parseKeybind(&state)) {}
+    while (try parseKeybind(&state, ally)) {}
     return state.keybinds.toOwnedSlice();
 }
 
-fn parseKeybind(state: *ParseState) !bool {
+fn parseKeybind(state: *ParseState, ally: Allocator) !bool {
     dbg("\nidx: {}\n", .{state.index});
     skipWhitespace(state);
     if (state.eof()) {
@@ -68,10 +68,10 @@ fn parseKeybind(state: *ParseState) !bool {
     // parse bind
     while (true) {
         skipHorizontalWhitespace(state);
-        const str = readString(state);
-        if (state.eof() or state.get() == '\n') {
+        if (state.eof() or state.peek() == '\n') {
             break;
         }
+        const str = readString(state);
 
         if (str.len > 0) {
             if (setString(&keybind, str)) {
@@ -91,24 +91,49 @@ fn parseKeybind(state: *ParseState) !bool {
         }
     }
 
+    state.next();
+
+    skipHorizontalWhitespace(state);
+    if (state.eof()) {
+        return false;
+    }
+
+    const begin = state.index;
+    while (!state.eof() and state.peek() != '\n') {
+        state.next();
+    }
+    const end = state.index;
+
+    const line = state.src[begin..end];
+    keybind.action = try ally.dupe(u8, line);
     try state.keybinds.append(keybind);
     return true;
 }
 
 fn setString(keybind: *Keybind, str: []const u8) bool {
+    if (keybind.special != Keybind.Special.None and keybind.key != 0) {
+        return false;
+    }
+
+    // modifier
     if (setModifier(keybind, str)) {
         return true;
     }
 
-    if (keybind.special != Keybind.Special.None or keybind.key != 0) {
-        return false;
+    // single char key
+    if (str.len == 1) {
+        keybind.key = str[0];
+        return true;
     }
+
+    if (setSpecial(keybind, str)) {
+        return true;
+    }
+
     return false;
 }
 
-fn setModifier(keybind: *Keybind, modifier: []const u8) bool {
-    const str = modifier;
-
+fn setModifier(keybind: *Keybind, str: []const u8) bool {
     if (std.ascii.eqlIgnoreCase("alt", str)) {
         keybind.alt = 1;
         return true;
@@ -126,11 +151,24 @@ fn setModifier(keybind: *Keybind, modifier: []const u8) bool {
     return false;
 }
 
+fn setSpecial(keybind: *Keybind, str: []const u8) bool {
+    const specials = std.enums.values(Keybind.Special);
+    dbg("Match {s} with special\n", .{str});
+    for (specials) |spec| {
+        const enumStr = @tagName(spec);
+        if (std.ascii.eqlIgnoreCase(str, enumStr)) {
+            keybind.special = spec;
+            return true;
+        }
+    }
+    return false;
+}
+
 fn readString(state: *ParseState) []const u8 {
     const begin = state.index;
     while (!state.eof()) {
         switch (state.peek()) {
-            '+', ',', '{', '}', ' ', '\t' => break,
+            '+', ',', '{', '}', ' ', '\t', '\n', '\r' => break,
             else => state.next(),
         }
     }
