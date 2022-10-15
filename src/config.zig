@@ -57,7 +57,6 @@ pub fn parse(src: []const u8, ally: Allocator) ![]Keybind {
 }
 
 fn parseKeybind(state: *ParseState, ally: Allocator) !bool {
-    dbg("\nidx: {}\n", .{state.index});
     skipWhitespace(state);
     if (state.eof()) {
         return false;
@@ -68,7 +67,7 @@ fn parseKeybind(state: *ParseState, ally: Allocator) !bool {
     // parse bind
     while (true) {
         skipHorizontalWhitespace(state);
-        if (state.eof() or state.peek() == '\n') {
+        if (state.eof() or state.get() == '\n') {
             break;
         }
         const str = readString(state);
@@ -85,21 +84,19 @@ fn parseKeybind(state: *ParseState, ally: Allocator) !bool {
             continue;
         }
 
-        if (state.peek() == '+') {
+        if (state.get() == '+') {
             state.next();
             continue;
         }
     }
-
-    state.next();
-
+    skipVerticalWhitespace(state);
     skipHorizontalWhitespace(state);
     if (state.eof()) {
         return false;
     }
 
     const begin = state.index;
-    while (!state.eof() and state.peek() != '\n') {
+    while (!state.eof() and state.get() != '\n') {
         state.next();
     }
     const end = state.index;
@@ -111,21 +108,22 @@ fn parseKeybind(state: *ParseState, ally: Allocator) !bool {
 }
 
 fn setString(keybind: *Keybind, str: []const u8) bool {
-    if (keybind.special != Keybind.Special.None and keybind.key != 0) {
-        return false;
-    }
-
     // modifier
     if (setModifier(keybind, str)) {
         return true;
     }
 
-    // single char key
+    if (keybind.special != Keybind.Special.None and keybind.key != 0) {
+        return false;
+    }
+
+    // single byte key
     if (str.len == 1) {
         keybind.key = str[0];
         return true;
     }
 
+    // multi byte key
     if (setSpecial(keybind, str)) {
         return true;
     }
@@ -153,7 +151,6 @@ fn setModifier(keybind: *Keybind, str: []const u8) bool {
 
 fn setSpecial(keybind: *Keybind, str: []const u8) bool {
     const specials = std.enums.values(Keybind.Special);
-    dbg("Match {s} with special\n", .{str});
     for (specials) |spec| {
         const enumStr = @tagName(spec);
         if (std.ascii.eqlIgnoreCase(str, enumStr)) {
@@ -167,7 +164,7 @@ fn setSpecial(keybind: *Keybind, str: []const u8) bool {
 fn readString(state: *ParseState) []const u8 {
     const begin = state.index;
     while (!state.eof()) {
-        switch (state.peek()) {
+        switch (state.get()) {
             '+', ',', '{', '}', ' ', '\t', '\n', '\r' => break,
             else => state.next(),
         }
@@ -178,8 +175,17 @@ fn readString(state: *ParseState) []const u8 {
 
 fn skipHorizontalWhitespace(state: *ParseState) void {
     while (!state.eof()) {
-        switch (state.peek()) {
+        switch (state.get()) {
             ' ', '\t' => state.next(),
+            else => return,
+        }
+    }
+}
+
+fn skipVerticalWhitespace(state: *ParseState) void {
+    while (!state.eof()) {
+        switch (state.get()) {
+            '\n', '\r' => state.next(),
             else => return,
         }
     }
@@ -187,7 +193,7 @@ fn skipHorizontalWhitespace(state: *ParseState) void {
 
 fn skipWhitespace(state: *ParseState) void {
     while (!state.eof()) {
-        switch (state.peek()) {
+        switch (state.get()) {
             '\n', '\r', ' ', '\t' => state.next(),
             else => return,
         }
@@ -203,7 +209,7 @@ const ParseState = struct {
         return self.index >= self.src.len;
     }
 
-    pub fn peek(self: *const ParseState) u8 {
+    pub fn get(self: *const ParseState) u8 {
         return self.src[self.index];
     }
 
@@ -229,22 +235,51 @@ fn dump(k: []Keybind) void {
     dbg("{any}\n", .{k});
 }
 
-test "parse basic command" {
+fn free(k: []Keybind, a: Allocator) void {
+    for (k) |j| {
+        j.deinit(a);
+    }
+    a.free(k);
+}
+
+test "parse basic command special key" {
     const ally = std.testing.allocator;
     const src = "alt + return\n  wt";
 
     const result = try parse(src, ally);
-    defer {
-        for (result) |k| {
-            k.deinit(ally);
-        }
-        ally.free(result);
-    }
-
-    dump(result);
+    defer free(result, ally);
 
     try expectEqual(@as(usize, 1), result.len);
     try expectEqual(@as(u1, 1), result[0].alt);
-    try expectEqual(@as(u1, 1), result[0].alt);
+    try expectEqual(Keybind.Special.Return, result[0].special);
     try expectEqualStrings("wt", result[0].action);
+}
+
+test "parse basic command regular key" {
+    const ally = std.testing.allocator;
+    const src = "\n\nalt+d\n\ntmenu run\n\n";
+
+    const result = try parse(src, ally);
+    defer free(result, ally);
+
+    try expectEqual(@as(usize, 1), result.len);
+    try expectEqual(@as(u1, 1), result[0].alt);
+    try expectEqual(Keybind.Special.None, result[0].special);
+    try expectEqual(@as(u32, 'd'), result[0].key);
+    try expectEqualStrings("tmenu run", result[0].action);
+}
+
+test "parse command with multiple modifiers" {
+    const ally = std.testing.allocator;
+    const src = "alt + shift + e\n\texit";
+
+    const result = try parse(src, ally);
+    defer free(result, ally);
+
+    try expectEqual(@as(usize, 1), result.len);
+    try expectEqual(@as(u1, 1), result[0].alt);
+    try expectEqual(@as(u1, 1), result[0].shift);
+    try expectEqual(Keybind.Special.None, result[0].special);
+    try expectEqual(@as(u32, 'e'), result[0].key);
+    try expectEqualStrings("exit", result[0].action);
 }
