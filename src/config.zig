@@ -56,6 +56,12 @@ pub fn parse(src: []const u8, ally: Allocator) ![]Keybind {
     return state.keybinds.toOwnedSlice();
 }
 
+pub fn parseFile(path: []const u8, ally: Allocator) ![]Keybind {
+    const src = try std.fs.cwd().readFileAlloc(ally, path, 1024 * 1024 * 8);
+    defer ally.free(src);
+    return parse(src, ally);
+}
+
 fn parseKeybind(state: *ParseState, ally: Allocator) !bool {
     skipWhitespace(state);
     if (state.eof()) {
@@ -119,7 +125,7 @@ fn setString(keybind: *Keybind, str: []const u8) bool {
 
     // single byte key
     if (str.len == 1) {
-        keybind.key = str[0];
+        keybind.key = std.ascii.toUpper(str[0]);
         return true;
     }
 

@@ -1,0 +1,14 @@
+alt + e
+	explorer
+
+alt + return
+	wt
+
+alt + d
+	tmenu run
+
+alt + o
+	tmenu open
+
+alt + shift + e
+	exit
